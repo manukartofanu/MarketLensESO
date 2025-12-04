@@ -325,10 +325,13 @@ namespace MarketLensESO.Services
                         i.LastSeenDate,
                         COUNT(s.SaleId) as TotalSalesCount,
                         COALESCE(SUM(s.Quantity), 0) as TotalQuantitySold,
-                        COALESCE(SUM(s.Price * s.Quantity), 0) as TotalValueSold,
-                        COALESCE(AVG(s.Price), 0) as AveragePrice,
-                        COALESCE(MIN(s.Price), 0) as MinPrice,
-                        COALESCE(MAX(s.Price), 0) as MaxPrice
+                        COALESCE(SUM(s.Price), 0) as TotalValueSold,
+                        CASE 
+                            WHEN SUM(s.Quantity) > 0 THEN COALESCE(SUM(s.Price) / CAST(SUM(s.Quantity) AS REAL), 0)
+                            ELSE 0
+                        END as AveragePrice,
+                        COALESCE(MIN(s.Price / CAST(s.Quantity AS REAL)), 0) as MinPrice,
+                        COALESCE(MAX(s.Price / CAST(s.Quantity AS REAL)), 0) as MaxPrice
                     FROM Items i
                     LEFT JOIN ItemSales s ON i.ItemId = s.ItemId
                     GROUP BY i.ItemId, i.ItemLink, i.FirstSeenDate, i.LastSeenDate
@@ -433,6 +436,53 @@ namespace MarketLensESO.Services
                 using var command = connection.CreateCommand();
                 command.CommandText = "SELECT COUNT(*) FROM ItemSales";
                 return Convert.ToInt32(command.ExecuteScalar());
+            });
+        }
+
+        public async Task<List<ItemSummary>> LoadItemSummariesAsync()
+        {
+            return await Task.Run(() =>
+            {
+                var summaries = new List<ItemSummary>();
+                
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                
+                using var command = connection.CreateCommand();
+                command.CommandText = @"
+                    SELECT 
+                        i.ItemLink,
+                        COUNT(s.SaleId) as TotalSalesCount,
+                        COALESCE(SUM(s.Quantity), 0) as TotalQuantitySold,
+                        COALESCE(SUM(s.Price), 0) as TotalValueSold,
+                        CASE 
+                            WHEN SUM(s.Quantity) > 0 THEN COALESCE(SUM(s.Price) / CAST(SUM(s.Quantity) AS REAL), 0)
+                            ELSE 0
+                        END as AveragePrice,
+                        COALESCE(MIN(s.Price / CAST(s.Quantity AS REAL)), 0) as MinPrice,
+                        COALESCE(MAX(s.Price / CAST(s.Quantity AS REAL)), 0) as MaxPrice
+                    FROM Items i
+                    INNER JOIN ItemSales s ON i.ItemId = s.ItemId
+                    GROUP BY i.ItemLink
+                    ORDER BY TotalValueSold DESC
+                ";
+                
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    summaries.Add(new ItemSummary
+                    {
+                        ItemLink = reader.GetString(0),
+                        TotalSalesCount = reader.GetInt32(1),
+                        TotalQuantitySold = reader.GetInt64(2),
+                        TotalValueSold = reader.GetInt64(3),
+                        AveragePrice = reader.GetInt64(4),
+                        MinPrice = reader.GetInt64(5),
+                        MaxPrice = reader.GetInt64(6)
+                    });
+                }
+                
+                return summaries;
             });
         }
     }

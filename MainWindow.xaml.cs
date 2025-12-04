@@ -13,6 +13,7 @@ namespace MarketLensESO
     {
         private readonly DatabaseService _databaseService;
         private List<Item> _items;
+        private List<ItemSummary> _summaries;
         private Item? _selectedItem;
 
         public MainWindow()
@@ -20,6 +21,7 @@ namespace MarketLensESO
             InitializeComponent();
             _databaseService = new DatabaseService();
             _items = new List<Item>();
+            _summaries = new List<ItemSummary>();
             Loaded += Window_Loaded;
         }
 
@@ -33,8 +35,11 @@ namespace MarketLensESO
             try
             {
                 ItemsDataGrid.ItemsSource = null;
+                SummaryDataGrid.ItemsSource = null;
                 _items = await _databaseService.LoadAllItemsAsync();
+                _summaries = await _databaseService.LoadItemSummariesAsync();
                 UpdateDataGrid();
+                UpdateSummaryDataGrid();
                 UpdateSummary();
             }
             catch (Exception ex)
@@ -85,6 +90,30 @@ namespace MarketLensESO
         private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             UpdateDataGrid();
+            UpdateSummaryDataGrid();
+        }
+
+        private void UpdateSummaryDataGrid()
+        {
+            var filteredSummaries = ApplySummarySearchFilter(_summaries);
+            SummaryDataGrid.ItemsSource = filteredSummaries;
+        }
+
+        private List<ItemSummary> ApplySummarySearchFilter(List<ItemSummary> summaries)
+        {
+            if (string.IsNullOrWhiteSpace(SearchTextBox?.Text))
+                return summaries;
+
+            var searchText = SearchTextBox.Text.ToLowerInvariant();
+            return summaries.Where(s =>
+                (s.ItemLink?.ToLowerInvariant().Contains(searchText) ?? false) ||
+                s.TotalSalesCount.ToString().Contains(searchText) ||
+                s.TotalQuantitySold.ToString().Contains(searchText) ||
+                s.TotalValueSold.ToString().Contains(searchText) ||
+                s.AveragePrice.ToString().Contains(searchText) ||
+                s.MinPrice.ToString().Contains(searchText) ||
+                s.MaxPrice.ToString().Contains(searchText)
+            ).ToList();
         }
 
         private async void RefreshButton_Click(object sender, RoutedEventArgs e)

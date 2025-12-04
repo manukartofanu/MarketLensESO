@@ -18,7 +18,8 @@ namespace MarketLensESO.Models
         
         // Calculated properties
         public DateTime SaleDate => DateTimeOffset.FromUnixTimeSeconds(SaleTimestamp).DateTime;
-        public long TotalValue => (long)Price * Quantity;
+        public long TotalValue => Price; // Price is already the total for the lot
+        public double PricePerItem => Quantity > 0 ? (double)Price / Quantity : 0;
     }
 }
 
