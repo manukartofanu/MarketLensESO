@@ -657,7 +657,7 @@
 		<!-- Summary -->
 		<StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,10,0,0">
 			<TextBlock Name="SummaryText"
-					   Text="Total Items: 0 | Total Sales: 0"
+					   Text="Total Items: 0 | Total Sales Value: 0"
 					   FontWeight="Bold"
 					   FontSize="12"
 					   Foreground="#2E7D32"/>

@@ -116,13 +116,16 @@ namespace MarketLensESO
             ).ToList();
         }
 
-        private async void UpdateSummary()
+        private void UpdateSummary()
         {
             try
             {
-                var totalItems = await _databaseService.GetTotalItemsCountAsync();
-                var totalSales = await _databaseService.GetTotalSalesCountAsync();
-                SummaryText.Text = $"Total Items: {totalItems:N0} | Total Sales: {totalSales:N0}";
+                // Calculate from filtered items to respect current filters (guild, search)
+                var filteredItems = ApplySearchFilter(_items);
+                var totalItems = filteredItems.Count;
+                var totalSalesValue = filteredItems.Sum(i => i.TotalValueSold);
+                
+                SummaryText.Text = $"Total Items: {totalItems:N0} | Total Sales Value: {totalSalesValue:N0}";
             }
             catch (Exception ex)
             {
