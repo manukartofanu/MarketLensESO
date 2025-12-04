@@ -1,0 +1,440 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
+using System.IO;
+using System.IO.Hashing;
+using System.Linq;
+using System.Text;
+using MarketLensESO.Models;
+
+namespace MarketLensESO.Services
+{
+    public class DatabaseService
+    {
+        private readonly string _databasePath;
+        private readonly string _schemaPath;
+        private readonly string _connectionString;
+        private const int BatchSize = 5000;
+
+        public DatabaseService()
+        {
+            // Store database in AppData
+            var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var appFolder = Path.Combine(appDataPath, "MarketLensESO");
+            Directory.CreateDirectory(appFolder);
+            _databasePath = Path.Combine(appFolder, "ItemHistory.db");
+            
+            // Get schema path from the Database folder in the project
+            var projectRoot = Directory.GetCurrentDirectory();
+            _schemaPath = Path.Combine(projectRoot, "Database", "schema.sql");
+            
+            // Build connection string
+            _connectionString = $"Data Source={_databasePath}";
+            
+            InitializeDatabase();
+        }
+
+        private void InitializeDatabase()
+        {
+            EnsureDatabaseExists();
+        }
+
+        private void EnsureDatabaseExists()
+        {
+            try
+            {
+                var isNewDatabase = !File.Exists(_databasePath);
+                
+                if (isNewDatabase)
+                {
+                    var directory = Path.GetDirectoryName(_databasePath);
+                    if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                    {
+                        Directory.CreateDirectory(directory);
+                    }
+                }
+
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                ConfigureSqliteOptimizations(connection);
+                
+                // Check if tables exist, create if they don't
+                if (!TablesExist(connection))
+                {
+                    CreateTables(connection);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Failed to initialize database: {ex.Message}", ex);
+            }
+        }
+
+        private bool TablesExist(SqliteConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = @"
+                SELECT COUNT(*) FROM sqlite_master 
+                WHERE type='table' AND name IN ('Items', 'ItemSales')
+            ";
+            var count = Convert.ToInt32(command.ExecuteScalar());
+            return count == 2;
+        }
+
+        private void ConfigureSqliteOptimizations(SqliteConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = @"
+                PRAGMA journal_mode = WAL;
+                PRAGMA synchronous = NORMAL;
+                PRAGMA cache_size = 10000;
+                PRAGMA temp_store = MEMORY;
+                PRAGMA mmap_size = 268435456;
+            ";
+            command.ExecuteNonQuery();
+        }
+
+        private void CreateTables(SqliteConnection connection)
+        {
+            try
+            {
+                // Use embedded schema to ensure it always works
+                CreateTablesDirectly(connection);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Failed to create tables: {ex.Message}", ex);
+            }
+        }
+
+        private void CreateTablesDirectly(SqliteConnection connection)
+        {
+            // Enable foreign keys
+            using (var pragmaCommand = connection.CreateCommand())
+            {
+                pragmaCommand.CommandText = "PRAGMA foreign_keys = ON";
+                pragmaCommand.ExecuteNonQuery();
+            }
+
+            // Create Items table
+            using (var createItemsCommand = connection.CreateCommand())
+            {
+                createItemsCommand.CommandText = @"
+                    CREATE TABLE IF NOT EXISTS Items (
+                        ItemId INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ItemLink TEXT NOT NULL UNIQUE,
+                        FirstSeenDate INTEGER NOT NULL,
+                        LastSeenDate INTEGER NOT NULL
+                    )";
+                createItemsCommand.ExecuteNonQuery();
+            }
+
+            // Create ItemSales table
+            using (var createSalesCommand = connection.CreateCommand())
+            {
+                createSalesCommand.CommandText = @"
+                    CREATE TABLE IF NOT EXISTS ItemSales (
+                        SaleId INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ItemId INTEGER NOT NULL,
+                        GuildId INTEGER NOT NULL,
+                        GuildName TEXT NOT NULL,
+                        Seller TEXT NOT NULL,
+                        Buyer TEXT NOT NULL,
+                        Quantity INTEGER NOT NULL,
+                        Price INTEGER NOT NULL,
+                        SaleTimestamp INTEGER NOT NULL,
+                        DuplicateIndex TINYINT NOT NULL DEFAULT 1,
+                        ContentHash INTEGER NOT NULL UNIQUE,
+                        FOREIGN KEY (ItemId) REFERENCES Items(ItemId)
+                    )";
+                createSalesCommand.ExecuteNonQuery();
+            }
+
+            // Create indexes
+            var indexStatements = new[]
+            {
+                "CREATE INDEX IF NOT EXISTS IX_Items_ItemLink ON Items(ItemLink)",
+                "CREATE INDEX IF NOT EXISTS IX_Items_LastSeenDate ON Items(LastSeenDate)",
+                "CREATE INDEX IF NOT EXISTS IX_ItemSales_ItemId ON ItemSales(ItemId)",
+                "CREATE INDEX IF NOT EXISTS IX_ItemSales_GuildId ON ItemSales(GuildId)",
+                "CREATE INDEX IF NOT EXISTS IX_ItemSales_Seller ON ItemSales(Seller)",
+                "CREATE INDEX IF NOT EXISTS IX_ItemSales_Buyer ON ItemSales(Buyer)",
+                "CREATE INDEX IF NOT EXISTS IX_ItemSales_SaleTimestamp ON ItemSales(SaleTimestamp)",
+                "CREATE INDEX IF NOT EXISTS IX_ItemSales_ContentHash ON ItemSales(ContentHash)",
+                "CREATE INDEX IF NOT EXISTS IX_ItemSales_DuplicateIndex ON ItemSales(DuplicateIndex)"
+            };
+
+            foreach (var indexSql in indexStatements)
+            {
+                using var indexCommand = connection.CreateCommand();
+                indexCommand.CommandText = indexSql;
+                indexCommand.ExecuteNonQuery();
+            }
+        }
+
+
+        public async Task ImportSalesAsync(List<ItemSale> sales)
+        {
+            await Task.Run(() =>
+            {
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                ConfigureSqliteOptimizations(connection);
+
+                using var transaction = connection.BeginTransaction();
+                
+                try
+                {
+                    // Group sales by item link to get or create items
+                    var salesByLink = sales.GroupBy(s => s.ItemLink).ToList();
+                    
+                    // Dictionary to cache item IDs
+                    var itemIdCache = new Dictionary<string, long>();
+                    
+                    // Process in batches
+                    for (int i = 0; i < salesByLink.Count; i += BatchSize)
+                    {
+                        var batch = salesByLink.Skip(i).Take(BatchSize).ToList();
+                        
+                        foreach (var linkGroup in batch)
+                        {
+                            var itemLink = linkGroup.Key;
+                            var firstSale = linkGroup.OrderBy(s => s.SaleTimestamp).First();
+                            
+                            // Get or create item
+                            long itemId;
+                            if (!itemIdCache.TryGetValue(itemLink, out itemId))
+                            {
+                                itemId = GetOrCreateItem(connection, itemLink, firstSale.SaleTimestamp);
+                                itemIdCache[itemLink] = itemId;
+                            }
+                            
+                            // Insert sales for this item
+                            foreach (var sale in linkGroup)
+                            {
+                                InsertSale(connection, itemId, sale);
+                            }
+                        }
+                    }
+                    
+                    transaction.Commit();
+                }
+                catch
+                {
+                    transaction.Rollback();
+                    throw;
+                }
+            });
+        }
+
+        private long GetOrCreateItem(SqliteConnection connection, string itemLink, long saleTimestamp)
+        {
+            // Try to get existing item
+            using var selectCommand = connection.CreateCommand();
+            selectCommand.CommandText = "SELECT ItemId, FirstSeenDate, LastSeenDate FROM Items WHERE ItemLink = @ItemLink";
+            selectCommand.Parameters.AddWithValue("@ItemLink", itemLink);
+            
+            using var reader = selectCommand.ExecuteReader();
+            if (reader.Read())
+            {
+                var itemId = reader.GetInt64(0);
+                var firstSeen = reader.GetInt64(1);
+                var lastSeen = reader.GetInt64(2);
+                
+                // Update LastSeenDate if this sale is newer
+                if (saleTimestamp > lastSeen)
+                {
+                    using var updateCommand = connection.CreateCommand();
+                    updateCommand.CommandText = "UPDATE Items SET LastSeenDate = @LastSeenDate WHERE ItemId = @ItemId";
+                    updateCommand.Parameters.AddWithValue("@LastSeenDate", saleTimestamp);
+                    updateCommand.Parameters.AddWithValue("@ItemId", itemId);
+                    updateCommand.ExecuteNonQuery();
+                }
+                
+                return itemId;
+            }
+            
+            // Create new item
+            using var insertCommand = connection.CreateCommand();
+            insertCommand.CommandText = @"
+                INSERT INTO Items (ItemLink, FirstSeenDate, LastSeenDate)
+                VALUES (@ItemLink, @FirstSeenDate, @LastSeenDate);
+                SELECT last_insert_rowid();
+            ";
+            insertCommand.Parameters.AddWithValue("@ItemLink", itemLink);
+            insertCommand.Parameters.AddWithValue("@FirstSeenDate", saleTimestamp);
+            insertCommand.Parameters.AddWithValue("@LastSeenDate", saleTimestamp);
+            
+            var result = insertCommand.ExecuteScalar();
+            return result != null ? (long)result : 0;
+        }
+
+        private void InsertSale(SqliteConnection connection, long itemId, ItemSale sale)
+        {
+            // Calculate content hash for duplicate detection
+            var hashInput = $"{sale.SaleTimestamp}|{sale.Seller}|{sale.Buyer}|{sale.Quantity}|{sale.Price}|{itemId}";
+            var hashBytes = XxHash64.Hash(Encoding.UTF8.GetBytes(hashInput));
+            var contentHash = BitConverter.ToInt64(hashBytes);
+            
+            // Check if sale already exists
+            using var checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = "SELECT COUNT(*) FROM ItemSales WHERE ContentHash = @ContentHash";
+            checkCommand.Parameters.AddWithValue("@ContentHash", contentHash);
+            var exists = Convert.ToInt32(checkCommand.ExecuteScalar()) > 0;
+            
+            if (exists)
+            {
+                return; // Skip duplicate
+            }
+            
+            // Insert sale
+            using var insertCommand = connection.CreateCommand();
+            insertCommand.CommandText = @"
+                INSERT INTO ItemSales (ItemId, GuildId, GuildName, Seller, Buyer, Quantity, Price, SaleTimestamp, DuplicateIndex, ContentHash)
+                VALUES (@ItemId, @GuildId, @GuildName, @Seller, @Buyer, @Quantity, @Price, @SaleTimestamp, @DuplicateIndex, @ContentHash)
+            ";
+            insertCommand.Parameters.AddWithValue("@ItemId", itemId);
+            insertCommand.Parameters.AddWithValue("@GuildId", sale.GuildId);
+            insertCommand.Parameters.AddWithValue("@GuildName", sale.GuildName);
+            insertCommand.Parameters.AddWithValue("@Seller", sale.Seller);
+            insertCommand.Parameters.AddWithValue("@Buyer", sale.Buyer);
+            insertCommand.Parameters.AddWithValue("@Quantity", sale.Quantity);
+            insertCommand.Parameters.AddWithValue("@Price", sale.Price);
+            insertCommand.Parameters.AddWithValue("@SaleTimestamp", sale.SaleTimestamp);
+            insertCommand.Parameters.AddWithValue("@DuplicateIndex", sale.DuplicateIndex);
+            insertCommand.Parameters.AddWithValue("@ContentHash", contentHash);
+            insertCommand.ExecuteNonQuery();
+        }
+
+        public async Task<List<Item>> LoadAllItemsAsync()
+        {
+            return await Task.Run(() =>
+            {
+                var items = new List<Item>();
+                
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                
+                using var command = connection.CreateCommand();
+                command.CommandText = @"
+                    SELECT 
+                        i.ItemId,
+                        i.ItemLink,
+                        i.FirstSeenDate,
+                        i.LastSeenDate,
+                        COUNT(s.SaleId) as TotalSalesCount,
+                        COALESCE(SUM(s.Quantity), 0) as TotalQuantitySold,
+                        COALESCE(SUM(s.Price * s.Quantity), 0) as TotalValueSold,
+                        COALESCE(AVG(s.Price), 0) as AveragePrice,
+                        COALESCE(MIN(s.Price), 0) as MinPrice,
+                        COALESCE(MAX(s.Price), 0) as MaxPrice
+                    FROM Items i
+                    LEFT JOIN ItemSales s ON i.ItemId = s.ItemId
+                    GROUP BY i.ItemId, i.ItemLink, i.FirstSeenDate, i.LastSeenDate
+                    ORDER BY i.LastSeenDate DESC
+                ";
+                
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    items.Add(new Item
+                    {
+                        ItemId = reader.GetInt64(0),
+                        ItemLink = reader.GetString(1),
+                        FirstSeenDate = reader.GetInt64(2),
+                        LastSeenDate = reader.GetInt64(3),
+                        TotalSalesCount = reader.GetInt32(4),
+                        TotalQuantitySold = reader.GetInt64(5),
+                        TotalValueSold = reader.GetInt64(6),
+                        AveragePrice = reader.GetInt64(7),
+                        MinPrice = reader.GetInt64(8),
+                        MaxPrice = reader.GetInt64(9)
+                    });
+                }
+                
+                return items;
+            });
+        }
+
+        public async Task<List<ItemSale>> LoadSalesForItemAsync(long itemId)
+        {
+            return await Task.Run(() =>
+            {
+                var sales = new List<ItemSale>();
+                
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                
+                using var command = connection.CreateCommand();
+                command.CommandText = @"
+                    SELECT 
+                        s.SaleId,
+                        s.ItemId,
+                        i.ItemLink,
+                        s.GuildId,
+                        s.GuildName,
+                        s.Seller,
+                        s.Buyer,
+                        s.Quantity,
+                        s.Price,
+                        s.SaleTimestamp,
+                        s.DuplicateIndex
+                    FROM ItemSales s
+                    INNER JOIN Items i ON s.ItemId = i.ItemId
+                    WHERE s.ItemId = @ItemId
+                    ORDER BY s.SaleTimestamp DESC
+                ";
+                command.Parameters.AddWithValue("@ItemId", itemId);
+                
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    sales.Add(new ItemSale
+                    {
+                        SaleId = reader.GetInt64(0),
+                        ItemId = reader.GetInt64(1),
+                        ItemLink = reader.GetString(2),
+                        GuildId = reader.GetInt32(3),
+                        GuildName = reader.GetString(4),
+                        Seller = reader.GetString(5),
+                        Buyer = reader.GetString(6),
+                        Quantity = reader.GetInt32(7),
+                        Price = reader.GetInt32(8),
+                        SaleTimestamp = reader.GetInt64(9),
+                        DuplicateIndex = reader.GetInt32(10)
+                    });
+                }
+                
+                return sales;
+            });
+        }
+
+        public async Task<int> GetTotalItemsCountAsync()
+        {
+            return await Task.Run(() =>
+            {
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT COUNT(*) FROM Items";
+                return Convert.ToInt32(command.ExecuteScalar());
+            });
+        }
+
+        public async Task<int> GetTotalSalesCountAsync()
+        {
+            return await Task.Run(() =>
+            {
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT COUNT(*) FROM ItemSales";
+                return Convert.ToInt32(command.ExecuteScalar());
+            });
+        }
+    }
+}
+

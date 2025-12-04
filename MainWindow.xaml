@@ -1,0 +1,359 @@
+<Window x:Class="MarketLensESO.MainWindow"
+		xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+		Title="Market Lens ESO - Item Sales Tracker" Height="800" Width="1400"
+		WindowStartupLocation="CenterScreen">
+	<Grid Margin="10">
+		<Grid.Resources>
+			<!-- Style for all buttons in the window -->
+			<Style TargetType="Button">
+				<Setter Property="Cursor" Value="Hand"/>
+				<Setter Property="Template">
+					<Setter.Value>
+						<ControlTemplate TargetType="Button">
+							<Border Background="{TemplateBinding Background}" 
+									CornerRadius="6"
+									Padding="{TemplateBinding Padding}">
+								<ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" 
+												VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+							</Border>
+						</ControlTemplate>
+					</Setter.Value>
+				</Setter>
+			</Style>
+		</Grid.Resources>
+
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="*"/>
+			<RowDefinition Height="Auto"/>
+		</Grid.RowDefinitions>
+
+		<!-- Header with actions -->
+		<StackPanel Grid.Row="0" Margin="0,0,0,10">
+			<DockPanel Margin="0,0,0,10" LastChildFill="False">
+				<Button Name="DatabaseButton" Content="Import Data"
+						Click="DatabaseButton_Click"
+						Padding="10,5"
+						Margin="5,0,0,0"
+						Background="#9B59B6"
+						Foreground="White"
+						BorderThickness="0"
+						FontWeight="Normal"
+						DockPanel.Dock="Left"/>
+
+				<Button Name="RefreshButton" Content="Refresh"
+						Click="RefreshButton_Click"
+						Padding="10,5"
+						Margin="5,0,0,0"
+						Background="#27AE60"
+						Foreground="White"
+						BorderThickness="0"
+						FontWeight="Normal"
+						DockPanel.Dock="Right"/>
+			</DockPanel>
+		</StackPanel>
+
+		<!-- Search Box -->
+		<StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
+			<TextBlock Text="Search:" 
+					VerticalAlignment="Center" 
+					Margin="0,0,10,0"
+					FontWeight="SemiBold"
+					Foreground="#2C3E50"/>
+			<TextBox Name="SearchTextBox"
+					Width="400"
+					Height="24"
+					FontSize="12"
+					Padding="5,3"
+					TextChanged="SearchTextBox_TextChanged"
+					VerticalContentAlignment="Center"/>
+		</StackPanel>
+
+		<!-- Items DataGrid -->
+		<DataGrid Name="ItemsDataGrid" 
+				Grid.Row="2"
+				AutoGenerateColumns="False"
+				CanUserAddRows="False"
+				CanUserDeleteRows="False"
+				IsReadOnly="True"
+				GridLinesVisibility="Horizontal"
+				HeadersVisibility="Column"
+				RowHeaderWidth="0"
+				RowHeight="40"
+				FontSize="12"
+				Background="White"
+				BorderBrush="#E1E5E9"
+				BorderThickness="1"
+				SelectionMode="Single"
+				SelectionUnit="FullRow"
+				AlternationCount="2"
+				MouseDoubleClick="ItemsDataGrid_MouseDoubleClick"
+				SelectionChanged="ItemsDataGrid_SelectionChanged">
+
+			<!-- Row Style Template -->
+			<DataGrid.RowStyle>
+				<Style TargetType="DataGridRow">
+					<Setter Property="Background" Value="White"/>
+					<Setter Property="BorderBrush" Value="Transparent"/>
+					<Setter Property="BorderThickness" Value="0"/>
+					<Setter Property="Margin" Value="0,1"/>
+					<Setter Property="Padding" Value="8,6"/>
+					<Style.Triggers>
+						<!-- Alternating row background -->
+						<Trigger Property="AlternationIndex" Value="1">
+							<Setter Property="Background" Value="#F8F9FA"/>
+						</Trigger>
+						<!-- Selection takes priority over alternating -->
+						<Trigger Property="IsSelected" Value="True">
+							<Setter Property="Background" Value="#1A2196F3"/>
+							<Setter Property="BorderBrush" Value="Transparent"/>
+							<Setter Property="BorderThickness" Value="0"/>
+						</Trigger>
+					</Style.Triggers>
+				</Style>
+			</DataGrid.RowStyle>
+
+			<!-- Override DataGrid default selection colors -->
+			<DataGrid.Resources>
+				<SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#1A2196F3"/>
+				<SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#000000"/>
+				<SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#1A2196F3"/>
+
+				<!-- Hide cell selection focus rectangle -->
+				<Style TargetType="DataGridCell">
+					<Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+					<Setter Property="BorderThickness" Value="0"/>
+					<Style.Triggers>
+						<Trigger Property="IsSelected" Value="True">
+							<Setter Property="Background" Value="Transparent"/>
+							<Setter Property="BorderBrush" Value="Transparent"/>
+							<Setter Property="BorderThickness" Value="0"/>
+						</Trigger>
+					</Style.Triggers>
+				</Style>
+			</DataGrid.Resources>
+
+			<DataGrid.Columns>
+				<DataGridTextColumn Header="Item Link"
+									Binding="{Binding ItemLink}"
+									Width="*">
+					<DataGridTextColumn.ElementStyle>
+						<Style TargetType="TextBlock">
+							<Setter Property="FontWeight" Value="SemiBold"/>
+							<Setter Property="FontSize" Value="12"/>
+							<Setter Property="Foreground" Value="#2C3E50"/>
+							<Setter Property="VerticalAlignment" Value="Center"/>
+							<Setter Property="Margin" Value="4,0"/>
+							<Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+						</Style>
+					</DataGridTextColumn.ElementStyle>
+					<DataGridTextColumn.HeaderStyle>
+						<Style TargetType="DataGridColumnHeader">
+							<Setter Property="FontSize" Value="12"/>
+							<Setter Property="FontWeight" Value="Bold"/>
+							<Setter Property="Foreground" Value="#34495E"/>
+							<Setter Property="Background" Value="#F8F9FA"/>
+							<Setter Property="BorderBrush" Value="#E1E5E9"/>
+							<Setter Property="BorderThickness" Value="0,0,1,1"/>
+							<Setter Property="Padding" Value="8,10"/>
+							<Setter Property="HorizontalContentAlignment" Value="Left"/>
+						</Style>
+					</DataGridTextColumn.HeaderStyle>
+				</DataGridTextColumn>
+				<DataGridTextColumn Header="Sales Count"
+									Binding="{Binding TotalSalesCount, StringFormat=N0}"
+									Width="100">
+					<DataGridTextColumn.ElementStyle>
+						<Style TargetType="TextBlock">
+							<Setter Property="TextAlignment" Value="Right"/>
+							<Setter Property="FontSize" Value="13"/>
+							<Setter Property="FontWeight" Value="SemiBold"/>
+							<Setter Property="Foreground" Value="#2C3E50"/>
+							<Setter Property="VerticalAlignment" Value="Center"/>
+							<Setter Property="Margin" Value="4,0"/>
+						</Style>
+					</DataGridTextColumn.ElementStyle>
+					<DataGridTextColumn.HeaderStyle>
+						<Style TargetType="DataGridColumnHeader">
+							<Setter Property="FontSize" Value="12"/>
+							<Setter Property="FontWeight" Value="Bold"/>
+							<Setter Property="Foreground" Value="#34495E"/>
+							<Setter Property="Background" Value="#F8F9FA"/>
+							<Setter Property="BorderBrush" Value="#E1E5E9"/>
+							<Setter Property="BorderThickness" Value="0,0,1,1"/>
+							<Setter Property="Padding" Value="8,10"/>
+							<Setter Property="HorizontalContentAlignment" Value="Right"/>
+						</Style>
+					</DataGridTextColumn.HeaderStyle>
+				</DataGridTextColumn>
+				<DataGridTextColumn Header="Quantity Sold"
+									Binding="{Binding TotalQuantitySold, StringFormat=N0}"
+									Width="120">
+					<DataGridTextColumn.ElementStyle>
+						<Style TargetType="TextBlock">
+							<Setter Property="TextAlignment" Value="Right"/>
+							<Setter Property="FontSize" Value="13"/>
+							<Setter Property="FontWeight" Value="Normal"/>
+							<Setter Property="Foreground" Value="#2C3E50"/>
+							<Setter Property="VerticalAlignment" Value="Center"/>
+							<Setter Property="Margin" Value="4,0"/>
+						</Style>
+					</DataGridTextColumn.ElementStyle>
+					<DataGridTextColumn.HeaderStyle>
+						<Style TargetType="DataGridColumnHeader">
+							<Setter Property="FontSize" Value="12"/>
+							<Setter Property="FontWeight" Value="Bold"/>
+							<Setter Property="Foreground" Value="#34495E"/>
+							<Setter Property="Background" Value="#F8F9FA"/>
+							<Setter Property="BorderBrush" Value="#E1E5E9"/>
+							<Setter Property="BorderThickness" Value="0,0,1,1"/>
+							<Setter Property="Padding" Value="8,10"/>
+							<Setter Property="HorizontalContentAlignment" Value="Right"/>
+						</Style>
+					</DataGridTextColumn.HeaderStyle>
+				</DataGridTextColumn>
+				<DataGridTextColumn Header="Total Value"
+									Binding="{Binding TotalValueSold, StringFormat=N0}"
+									Width="120">
+					<DataGridTextColumn.ElementStyle>
+						<Style TargetType="TextBlock">
+							<Setter Property="TextAlignment" Value="Right"/>
+							<Setter Property="FontSize" Value="13"/>
+							<Setter Property="FontWeight" Value="Bold"/>
+							<Setter Property="Foreground" Value="#27AE60"/>
+							<Setter Property="VerticalAlignment" Value="Center"/>
+							<Setter Property="Margin" Value="4,0"/>
+						</Style>
+					</DataGridTextColumn.ElementStyle>
+					<DataGridTextColumn.HeaderStyle>
+						<Style TargetType="DataGridColumnHeader">
+							<Setter Property="FontSize" Value="12"/>
+							<Setter Property="FontWeight" Value="Bold"/>
+							<Setter Property="Foreground" Value="#34495E"/>
+							<Setter Property="Background" Value="#F8F9FA"/>
+							<Setter Property="BorderBrush" Value="#E1E5E9"/>
+							<Setter Property="BorderThickness" Value="0,0,1,1"/>
+							<Setter Property="Padding" Value="8,10"/>
+							<Setter Property="HorizontalContentAlignment" Value="Right"/>
+						</Style>
+					</DataGridTextColumn.HeaderStyle>
+				</DataGridTextColumn>
+				<DataGridTextColumn Header="Avg Price"
+									Binding="{Binding AveragePrice, StringFormat=N0}"
+									Width="100">
+					<DataGridTextColumn.ElementStyle>
+						<Style TargetType="TextBlock">
+							<Setter Property="TextAlignment" Value="Right"/>
+							<Setter Property="FontSize" Value="13"/>
+							<Setter Property="FontWeight" Value="Normal"/>
+							<Setter Property="Foreground" Value="#2C3E50"/>
+							<Setter Property="VerticalAlignment" Value="Center"/>
+							<Setter Property="Margin" Value="4,0"/>
+						</Style>
+					</DataGridTextColumn.ElementStyle>
+					<DataGridTextColumn.HeaderStyle>
+						<Style TargetType="DataGridColumnHeader">
+							<Setter Property="FontSize" Value="12"/>
+							<Setter Property="FontWeight" Value="Bold"/>
+							<Setter Property="Foreground" Value="#34495E"/>
+							<Setter Property="Background" Value="#F8F9FA"/>
+							<Setter Property="BorderBrush" Value="#E1E5E9"/>
+							<Setter Property="BorderThickness" Value="0,0,1,1"/>
+							<Setter Property="Padding" Value="8,10"/>
+							<Setter Property="HorizontalContentAlignment" Value="Right"/>
+						</Style>
+					</DataGridTextColumn.HeaderStyle>
+				</DataGridTextColumn>
+				<DataGridTextColumn Header="Min Price"
+									Binding="{Binding MinPrice, StringFormat=N0}"
+									Width="100">
+					<DataGridTextColumn.ElementStyle>
+						<Style TargetType="TextBlock">
+							<Setter Property="TextAlignment" Value="Right"/>
+							<Setter Property="FontSize" Value="12"/>
+							<Setter Property="FontWeight" Value="Normal"/>
+							<Setter Property="Foreground" Value="#7F8C8D"/>
+							<Setter Property="VerticalAlignment" Value="Center"/>
+							<Setter Property="Margin" Value="4,0"/>
+						</Style>
+					</DataGridTextColumn.ElementStyle>
+					<DataGridTextColumn.HeaderStyle>
+						<Style TargetType="DataGridColumnHeader">
+							<Setter Property="FontSize" Value="12"/>
+							<Setter Property="FontWeight" Value="Bold"/>
+							<Setter Property="Foreground" Value="#34495E"/>
+							<Setter Property="Background" Value="#F8F9FA"/>
+							<Setter Property="BorderBrush" Value="#E1E5E9"/>
+							<Setter Property="BorderThickness" Value="0,0,1,1"/>
+							<Setter Property="Padding" Value="8,10"/>
+							<Setter Property="HorizontalContentAlignment" Value="Right"/>
+						</Style>
+					</DataGridTextColumn.HeaderStyle>
+				</DataGridTextColumn>
+				<DataGridTextColumn Header="Max Price"
+									Binding="{Binding MaxPrice, StringFormat=N0}"
+									Width="100">
+					<DataGridTextColumn.ElementStyle>
+						<Style TargetType="TextBlock">
+							<Setter Property="TextAlignment" Value="Right"/>
+							<Setter Property="FontSize" Value="12"/>
+							<Setter Property="FontWeight" Value="Normal"/>
+							<Setter Property="Foreground" Value="#7F8C8D"/>
+							<Setter Property="VerticalAlignment" Value="Center"/>
+							<Setter Property="Margin" Value="4,0"/>
+						</Style>
+					</DataGridTextColumn.ElementStyle>
+					<DataGridTextColumn.HeaderStyle>
+						<Style TargetType="DataGridColumnHeader">
+							<Setter Property="FontSize" Value="12"/>
+							<Setter Property="FontWeight" Value="Bold"/>
+							<Setter Property="Foreground" Value="#34495E"/>
+							<Setter Property="Background" Value="#F8F9FA"/>
+							<Setter Property="BorderBrush" Value="#E1E5E9"/>
+							<Setter Property="BorderThickness" Value="0,0,1,1"/>
+							<Setter Property="Padding" Value="8,10"/>
+							<Setter Property="HorizontalContentAlignment" Value="Right"/>
+						</Style>
+					</DataGridTextColumn.HeaderStyle>
+				</DataGridTextColumn>
+				<DataGridTextColumn Header="Last Seen"
+									Binding="{Binding LastSeenDateTime, StringFormat=yyyy-MM-dd HH:mm}"
+									Width="140">
+					<DataGridTextColumn.ElementStyle>
+						<Style TargetType="TextBlock">
+							<Setter Property="FontSize" Value="12"/>
+							<Setter Property="FontWeight" Value="Normal"/>
+							<Setter Property="Foreground" Value="#34495E"/>
+							<Setter Property="VerticalAlignment" Value="Center"/>
+							<Setter Property="Margin" Value="4,0"/>
+						</Style>
+					</DataGridTextColumn.ElementStyle>
+					<DataGridTextColumn.HeaderStyle>
+						<Style TargetType="DataGridColumnHeader">
+							<Setter Property="FontSize" Value="12"/>
+							<Setter Property="FontWeight" Value="Bold"/>
+							<Setter Property="Foreground" Value="#34495E"/>
+							<Setter Property="Background" Value="#F8F9FA"/>
+							<Setter Property="BorderBrush" Value="#E1E5E9"/>
+							<Setter Property="BorderThickness" Value="0,0,1,1"/>
+							<Setter Property="Padding" Value="8,10"/>
+							<Setter Property="HorizontalContentAlignment" Value="Left"/>
+						</Style>
+					</DataGridTextColumn.HeaderStyle>
+				</DataGridTextColumn>
+			</DataGrid.Columns>
+		</DataGrid>
+
+		<!-- Summary -->
+		<StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,10,0,0">
+			<TextBlock Name="SummaryText"
+					   Text="Total Items: 0 | Total Sales: 0"
+					   FontWeight="Bold"
+					   FontSize="12"
+					   Foreground="#2E7D32"/>
+		</StackPanel>
+	</Grid>
+</Window>
+
