@@ -169,6 +169,22 @@ namespace MarketLensESO
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
+        private void CopyLinkMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (SummaryDataGrid.SelectedItem is ItemSummary selectedSummary)
+                {
+                    Clipboard.SetText(selectedSummary.ItemLink);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error copying link: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
     }
 }
 

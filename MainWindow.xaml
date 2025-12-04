@@ -368,6 +368,14 @@
 						SelectionUnit="FullRow"
 						AlternationCount="2">
 
+					<DataGrid.ContextMenu>
+						<ContextMenu>
+							<MenuItem Name="CopyLinkMenuItem" 
+									  Header="Copy Link" 
+									  Click="CopyLinkMenuItem_Click"/>
+						</ContextMenu>
+					</DataGrid.ContextMenu>
+
 					<!-- Row Style Template -->
 					<DataGrid.RowStyle>
 						<Style TargetType="DataGridRow">
