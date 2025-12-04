@@ -106,6 +106,13 @@
 				AlternationCount="2"
 				MouseDoubleClick="ItemsDataGrid_MouseDoubleClick"
 				SelectionChanged="ItemsDataGrid_SelectionChanged">
+				<DataGrid.ContextMenu>
+					<ContextMenu>
+						<MenuItem Name="SetNameMenuItem" 
+								  Header="Set Name" 
+								  Click="SetNameMenuItem_Click"/>
+					</ContextMenu>
+				</DataGrid.ContextMenu>
 
 			<!-- Row Style Template -->
 			<DataGrid.RowStyle>
@@ -159,6 +166,32 @@
 							<Setter Property="FontWeight" Value="SemiBold"/>
 							<Setter Property="FontSize" Value="12"/>
 							<Setter Property="Foreground" Value="#2C3E50"/>
+							<Setter Property="VerticalAlignment" Value="Center"/>
+							<Setter Property="Margin" Value="4,0"/>
+							<Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+						</Style>
+					</DataGridTextColumn.ElementStyle>
+					<DataGridTextColumn.HeaderStyle>
+						<Style TargetType="DataGridColumnHeader">
+							<Setter Property="FontSize" Value="12"/>
+							<Setter Property="FontWeight" Value="Bold"/>
+							<Setter Property="Foreground" Value="#34495E"/>
+							<Setter Property="Background" Value="#F8F9FA"/>
+							<Setter Property="BorderBrush" Value="#E1E5E9"/>
+							<Setter Property="BorderThickness" Value="0,0,1,1"/>
+							<Setter Property="Padding" Value="8,10"/>
+							<Setter Property="HorizontalContentAlignment" Value="Left"/>
+						</Style>
+					</DataGridTextColumn.HeaderStyle>
+				</DataGridTextColumn>
+				<DataGridTextColumn Header="Name"
+									Binding="{Binding Name}"
+									Width="200">
+					<DataGridTextColumn.ElementStyle>
+						<Style TargetType="TextBlock">
+							<Setter Property="FontSize" Value="12"/>
+							<Setter Property="FontWeight" Value="Normal"/>
+							<Setter Property="Foreground" Value="#34495E"/>
 							<Setter Property="VerticalAlignment" Value="Center"/>
 							<Setter Property="Margin" Value="4,0"/>
 							<Setter Property="TextTrimming" Value="CharacterEllipsis"/>
@@ -361,6 +394,9 @@
 							<MenuItem Name="CopyLinkMenuItem" 
 									  Header="Copy Link" 
 									  Click="CopyLinkMenuItem_Click"/>
+							<MenuItem Name="SetNameSummaryMenuItem" 
+									  Header="Set Name" 
+									  Click="SetNameSummaryMenuItem_Click"/>
 						</ContextMenu>
 					</DataGrid.ContextMenu>
 
@@ -413,6 +449,32 @@
 									<Setter Property="FontWeight" Value="SemiBold"/>
 									<Setter Property="FontSize" Value="12"/>
 									<Setter Property="Foreground" Value="#2C3E50"/>
+									<Setter Property="VerticalAlignment" Value="Center"/>
+									<Setter Property="Margin" Value="4,0"/>
+									<Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+								</Style>
+							</DataGridTextColumn.ElementStyle>
+							<DataGridTextColumn.HeaderStyle>
+								<Style TargetType="DataGridColumnHeader">
+									<Setter Property="FontSize" Value="12"/>
+									<Setter Property="FontWeight" Value="Bold"/>
+									<Setter Property="Foreground" Value="#34495E"/>
+									<Setter Property="Background" Value="#F8F9FA"/>
+									<Setter Property="BorderBrush" Value="#E1E5E9"/>
+									<Setter Property="BorderThickness" Value="0,0,1,1"/>
+									<Setter Property="Padding" Value="8,10"/>
+									<Setter Property="HorizontalContentAlignment" Value="Left"/>
+								</Style>
+							</DataGridTextColumn.HeaderStyle>
+						</DataGridTextColumn>
+						<DataGridTextColumn Header="Name"
+											Binding="{Binding Name}"
+											Width="200">
+							<DataGridTextColumn.ElementStyle>
+								<Style TargetType="TextBlock">
+									<Setter Property="FontSize" Value="12"/>
+									<Setter Property="FontWeight" Value="Normal"/>
+									<Setter Property="Foreground" Value="#34495E"/>
 									<Setter Property="VerticalAlignment" Value="Center"/>
 									<Setter Property="Margin" Value="4,0"/>
 									<Setter Property="TextTrimming" Value="CharacterEllipsis"/>

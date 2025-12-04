@@ -106,6 +106,7 @@ namespace MarketLensESO
             var searchText = SearchTextBox.Text.ToLowerInvariant();
             return items.Where(i =>
                 (i.ItemLink?.ToLowerInvariant().Contains(searchText) ?? false) ||
+                (i.Name?.ToLowerInvariant().Contains(searchText) ?? false) ||
                 i.TotalSalesCount.ToString().Contains(searchText) ||
                 i.TotalQuantitySold.ToString().Contains(searchText) ||
                 i.TotalValueSold.ToString().Contains(searchText) ||
@@ -150,6 +151,7 @@ namespace MarketLensESO
             var searchText = SearchTextBox.Text.ToLowerInvariant();
             return summaries.Where(s =>
                 (s.ItemLink?.ToLowerInvariant().Contains(searchText) ?? false) ||
+                (s.Name?.ToLowerInvariant().Contains(searchText) ?? false) ||
                 s.TotalSalesCount.ToString().Contains(searchText) ||
                 s.TotalQuantitySold.ToString().Contains(searchText) ||
                 s.TotalValueSold.ToString().Contains(searchText) ||
@@ -227,6 +229,53 @@ namespace MarketLensESO
             catch (Exception ex)
             {
                 MessageBox.Show($"Error copying link: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void SetNameMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (ItemsDataGrid.SelectedItem is Item selectedItem)
+                {
+                    var setNameWindow = new SetItemNameWindow(selectedItem.ItemLink, selectedItem.Name);
+                    setNameWindow.Owner = this;
+                    
+                    if (setNameWindow.ShowDialog() == true && setNameWindow.Saved)
+                    {
+                        await _databaseService.UpdateItemNameAsync(selectedItem.ItemId, setNameWindow.ItemName);
+                        await LoadItemsAsync(); // Refresh the data
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error setting item name: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void SetNameSummaryMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (SummaryDataGrid.SelectedItem is ItemSummary selectedSummary)
+                {
+                    var currentName = await _databaseService.GetItemNameAsync(selectedSummary.ItemId);
+                    var setNameWindow = new SetItemNameWindow(selectedSummary.ItemLink, currentName);
+                    setNameWindow.Owner = this;
+                    
+                    if (setNameWindow.ShowDialog() == true && setNameWindow.Saved)
+                    {
+                        await _databaseService.UpdateItemNameAsync(selectedSummary.ItemId, setNameWindow.ItemName);
+                        await LoadItemsAsync(); // Refresh the data
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error setting item name: {ex.Message}", "Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }

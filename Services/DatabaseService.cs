@@ -381,7 +381,9 @@ namespace MarketLensESO.Services
                 var guildFilter = guildId.HasValue ? "AND s.GuildId = @GuildId" : "";
                 command.CommandText = $@"
                     SELECT 
+                        i.ItemId,
                         i.ItemLink,
+                        i.Name,
                         COUNT(s.SaleId) as TotalSalesCount,
                         COALESCE(SUM(s.Quantity), 0) as TotalQuantitySold,
                         COALESCE(SUM(s.Price), 0) as TotalValueSold,
@@ -394,7 +396,7 @@ namespace MarketLensESO.Services
                     FROM Items i
                     INNER JOIN ItemSales s ON i.ItemId = s.ItemId
                     WHERE 1=1 {guildFilter}
-                    GROUP BY i.ItemLink
+                    GROUP BY i.ItemId, i.ItemLink, i.Name
                     ORDER BY TotalValueSold DESC
                 ";
                 
@@ -408,13 +410,15 @@ namespace MarketLensESO.Services
                 {
                     summaries.Add(new ItemSummary
                     {
-                        ItemLink = reader.GetString(0),
-                        TotalSalesCount = reader.GetInt32(1),
-                        TotalQuantitySold = reader.GetInt64(2),
-                        TotalValueSold = reader.GetInt64(3),
-                        AveragePrice = reader.GetInt64(4),
-                        MinPrice = reader.GetInt64(5),
-                        MaxPrice = reader.GetInt64(6)
+                        ItemId = reader.GetInt64(0),
+                        ItemLink = reader.GetString(1),
+                        Name = reader.GetString(2),
+                        TotalSalesCount = reader.GetInt32(3),
+                        TotalQuantitySold = reader.GetInt64(4),
+                        TotalValueSold = reader.GetInt64(5),
+                        AveragePrice = reader.GetInt64(6),
+                        MinPrice = reader.GetInt64(7),
+                        MaxPrice = reader.GetInt64(8)
                     });
                 }
                 
@@ -512,6 +516,46 @@ namespace MarketLensESO.Services
                 }
                 
                 return guilds;
+            });
+        }
+
+        public async Task UpdateItemNameAsync(long itemId, string name)
+        {
+            await Task.Run(() =>
+            {
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                
+                using var command = connection.CreateCommand();
+                command.CommandText = @"
+                    UPDATE Items
+                    SET Name = @Name
+                    WHERE ItemId = @ItemId
+                ";
+                command.Parameters.AddWithValue("@Name", name ?? "");
+                command.Parameters.AddWithValue("@ItemId", itemId);
+                
+                command.ExecuteNonQuery();
+            });
+        }
+
+        public async Task<string> GetItemNameAsync(long itemId)
+        {
+            return await Task.Run(() =>
+            {
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                
+                using var command = connection.CreateCommand();
+                command.CommandText = @"
+                    SELECT Name
+                    FROM Items
+                    WHERE ItemId = @ItemId
+                ";
+                command.Parameters.AddWithValue("@ItemId", itemId);
+                
+                var result = command.ExecuteScalar();
+                return result?.ToString() ?? "";
             });
         }
     }
