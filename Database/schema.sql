@@ -12,8 +12,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE Items (
     ItemId INTEGER PRIMARY KEY AUTOINCREMENT,
     ItemLink TEXT NOT NULL UNIQUE,
-    FirstSeenDate INTEGER NOT NULL,
-    LastSeenDate INTEGER NOT NULL
+    Name TEXT NOT NULL DEFAULT ''
 );
 
 -- ItemSales table (tracks all sales of items)
@@ -38,7 +37,6 @@ CREATE TABLE ItemSales (
 
 -- Items indexes
 CREATE INDEX IX_Items_ItemLink ON Items(ItemLink);
-CREATE INDEX IX_Items_LastSeenDate ON Items(LastSeenDate);
 
 -- ItemSales indexes
 CREATE INDEX IX_ItemSales_ItemId ON ItemSales(ItemId);

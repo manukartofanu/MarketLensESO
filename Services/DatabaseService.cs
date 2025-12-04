@@ -124,8 +124,7 @@ namespace MarketLensESO.Services
                     CREATE TABLE IF NOT EXISTS Items (
                         ItemId INTEGER PRIMARY KEY AUTOINCREMENT,
                         ItemLink TEXT NOT NULL UNIQUE,
-                        FirstSeenDate INTEGER NOT NULL,
-                        LastSeenDate INTEGER NOT NULL
+                        Name TEXT NOT NULL DEFAULT ''
                     )";
                 createItemsCommand.ExecuteNonQuery();
             }
@@ -155,7 +154,6 @@ namespace MarketLensESO.Services
             var indexStatements = new[]
             {
                 "CREATE INDEX IF NOT EXISTS IX_Items_ItemLink ON Items(ItemLink)",
-                "CREATE INDEX IF NOT EXISTS IX_Items_LastSeenDate ON Items(LastSeenDate)",
                 "CREATE INDEX IF NOT EXISTS IX_ItemSales_ItemId ON ItemSales(ItemId)",
                 "CREATE INDEX IF NOT EXISTS IX_ItemSales_GuildId ON ItemSales(GuildId)",
                 "CREATE INDEX IF NOT EXISTS IX_ItemSales_Seller ON ItemSales(Seller)",
@@ -206,7 +204,7 @@ namespace MarketLensESO.Services
                             long itemId;
                             if (!itemIdCache.TryGetValue(itemLink, out itemId))
                             {
-                                itemId = GetOrCreateItem(connection, itemLink, firstSale.SaleTimestamp);
+                                itemId = GetOrCreateItem(connection, itemLink);
                                 itemIdCache[itemLink] = itemId;
                             }
                             
@@ -228,43 +226,27 @@ namespace MarketLensESO.Services
             });
         }
 
-        private long GetOrCreateItem(SqliteConnection connection, string itemLink, long saleTimestamp)
+        private long GetOrCreateItem(SqliteConnection connection, string itemLink)
         {
             // Try to get existing item
             using var selectCommand = connection.CreateCommand();
-            selectCommand.CommandText = "SELECT ItemId, FirstSeenDate, LastSeenDate FROM Items WHERE ItemLink = @ItemLink";
+            selectCommand.CommandText = "SELECT ItemId FROM Items WHERE ItemLink = @ItemLink";
             selectCommand.Parameters.AddWithValue("@ItemLink", itemLink);
             
             using var reader = selectCommand.ExecuteReader();
             if (reader.Read())
             {
-                var itemId = reader.GetInt64(0);
-                var firstSeen = reader.GetInt64(1);
-                var lastSeen = reader.GetInt64(2);
-                
-                // Update LastSeenDate if this sale is newer
-                if (saleTimestamp > lastSeen)
-                {
-                    using var updateCommand = connection.CreateCommand();
-                    updateCommand.CommandText = "UPDATE Items SET LastSeenDate = @LastSeenDate WHERE ItemId = @ItemId";
-                    updateCommand.Parameters.AddWithValue("@LastSeenDate", saleTimestamp);
-                    updateCommand.Parameters.AddWithValue("@ItemId", itemId);
-                    updateCommand.ExecuteNonQuery();
-                }
-                
-                return itemId;
+                return reader.GetInt64(0);
             }
             
             // Create new item
             using var insertCommand = connection.CreateCommand();
             insertCommand.CommandText = @"
-                INSERT INTO Items (ItemLink, FirstSeenDate, LastSeenDate)
-                VALUES (@ItemLink, @FirstSeenDate, @LastSeenDate);
+                INSERT INTO Items (ItemLink, Name)
+                VALUES (@ItemLink, '');
                 SELECT last_insert_rowid();
             ";
             insertCommand.Parameters.AddWithValue("@ItemLink", itemLink);
-            insertCommand.Parameters.AddWithValue("@FirstSeenDate", saleTimestamp);
-            insertCommand.Parameters.AddWithValue("@LastSeenDate", saleTimestamp);
             
             var result = insertCommand.ExecuteScalar();
             return result != null ? (long)result : 0;
@@ -464,8 +446,7 @@ namespace MarketLensESO.Services
                     SELECT 
                         i.ItemId,
                         i.ItemLink,
-                        i.FirstSeenDate,
-                        i.LastSeenDate,
+                        i.Name,
                         COUNT(s.SaleId) as TotalSalesCount,
                         COALESCE(SUM(s.Quantity), 0) as TotalQuantitySold,
                         COALESCE(SUM(s.Price), 0) as TotalValueSold,
@@ -478,8 +459,8 @@ namespace MarketLensESO.Services
                     FROM Items i
                     INNER JOIN ItemSales s ON i.ItemId = s.ItemId
                     WHERE 1=1 {guildFilter}
-                    GROUP BY i.ItemId, i.ItemLink, i.FirstSeenDate, i.LastSeenDate
-                    ORDER BY i.LastSeenDate DESC
+                    GROUP BY i.ItemId, i.ItemLink, i.Name
+                    ORDER BY MAX(s.SaleTimestamp) DESC
                 ";
                 
                 if (guildId.HasValue)
@@ -494,14 +475,13 @@ namespace MarketLensESO.Services
                     {
                         ItemId = reader.GetInt64(0),
                         ItemLink = reader.GetString(1),
-                        FirstSeenDate = reader.GetInt64(2),
-                        LastSeenDate = reader.GetInt64(3),
-                        TotalSalesCount = reader.GetInt32(4),
-                        TotalQuantitySold = reader.GetInt64(5),
-                        TotalValueSold = reader.GetInt64(6),
-                        AveragePrice = reader.GetInt64(7),
-                        MinPrice = reader.GetInt64(8),
-                        MaxPrice = reader.GetInt64(9)
+                        Name = reader.GetString(2),
+                        TotalSalesCount = reader.GetInt32(3),
+                        TotalQuantitySold = reader.GetInt64(4),
+                        TotalValueSold = reader.GetInt64(5),
+                        AveragePrice = reader.GetInt64(6),
+                        MinPrice = reader.GetInt64(7),
+                        MaxPrice = reader.GetInt64(8)
                     });
                 }
                 
