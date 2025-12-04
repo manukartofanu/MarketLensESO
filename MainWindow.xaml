@@ -55,8 +55,21 @@
 			</DockPanel>
 		</StackPanel>
 
-		<!-- Search Box -->
+		<!-- Search Box and Guild Filter -->
 		<StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
+			<TextBlock Text="Guild:" 
+					VerticalAlignment="Center" 
+					Margin="0,0,10,0"
+					FontWeight="SemiBold"
+					Foreground="#2C3E50"/>
+			<ComboBox Name="GuildComboBox"
+					Width="260"
+					Height="24"
+					FontSize="12"
+					DisplayMemberPath="Value"
+					SelectedValuePath="Key"
+					SelectionChanged="GuildComboBox_SelectionChanged"
+					Margin="0,0,20,0"/>
 			<TextBlock Text="Search:" 
 					VerticalAlignment="Center" 
 					Margin="0,0,10,0"

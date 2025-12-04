@@ -15,6 +15,7 @@ namespace MarketLensESO
         private List<Item> _items;
         private List<ItemSummary> _summaries;
         private Item? _selectedItem;
+        private int? _selectedGuildId;
 
         public MainWindow()
         {
@@ -27,7 +28,35 @@ namespace MarketLensESO
 
         private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
+            await LoadGuildsAsync();
             await LoadItemsAsync();
+        }
+
+        private async Task LoadGuildsAsync()
+        {
+            try
+            {
+                var guilds = await _databaseService.LoadAllGuildsAsync();
+                
+                // Add "All Guilds" option
+                var guildItems = new List<KeyValuePair<int?, string>>
+                {
+                    new KeyValuePair<int?, string>(null, "All Guilds")
+                };
+                
+                foreach (var guild in guilds)
+                {
+                    guildItems.Add(new KeyValuePair<int?, string>(guild.GuildId, guild.GuildName));
+                }
+                
+                GuildComboBox.ItemsSource = guildItems;
+                GuildComboBox.SelectedIndex = 0; // Select "All Guilds" by default
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading guilds: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private async Task LoadItemsAsync()
@@ -36,8 +65,8 @@ namespace MarketLensESO
             {
                 ItemsDataGrid.ItemsSource = null;
                 SummaryDataGrid.ItemsSource = null;
-                _items = await _databaseService.LoadAllItemsAsync();
-                _summaries = await _databaseService.LoadItemSummariesAsync();
+                _items = await _databaseService.LoadAllItemsAsync(_selectedGuildId);
+                _summaries = await _databaseService.LoadItemSummariesAsync(_selectedGuildId);
                 UpdateDataGrid();
                 UpdateSummaryDataGrid();
                 UpdateSummary();
@@ -47,6 +76,20 @@ namespace MarketLensESO
                 MessageBox.Show($"Error loading items: {ex.Message}", "Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        private async void GuildComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (GuildComboBox.SelectedItem is KeyValuePair<int?, string> selected)
+            {
+                _selectedGuildId = selected.Key;
+            }
+            else
+            {
+                _selectedGuildId = null;
+            }
+            
+            await LoadItemsAsync();
         }
 
         private void UpdateDataGrid()
@@ -118,6 +161,7 @@ namespace MarketLensESO
 
         private async void RefreshButton_Click(object sender, RoutedEventArgs e)
         {
+            await LoadGuildsAsync();
             await LoadItemsAsync();
         }
 
@@ -131,7 +175,8 @@ namespace MarketLensESO
                 };
                 databaseWindow.ShowDialog();
                 
-                // Refresh data after import
+                // Refresh guilds and data after import
+                await LoadGuildsAsync();
                 await LoadItemsAsync();
             }
             catch (Exception ex)

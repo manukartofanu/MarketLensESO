@@ -307,59 +307,6 @@ namespace MarketLensESO.Services
             insertCommand.ExecuteNonQuery();
         }
 
-        public async Task<List<Item>> LoadAllItemsAsync()
-        {
-            return await Task.Run(() =>
-            {
-                var items = new List<Item>();
-                
-                using var connection = new SqliteConnection(_connectionString);
-                connection.Open();
-                
-                using var command = connection.CreateCommand();
-                command.CommandText = @"
-                    SELECT 
-                        i.ItemId,
-                        i.ItemLink,
-                        i.FirstSeenDate,
-                        i.LastSeenDate,
-                        COUNT(s.SaleId) as TotalSalesCount,
-                        COALESCE(SUM(s.Quantity), 0) as TotalQuantitySold,
-                        COALESCE(SUM(s.Price), 0) as TotalValueSold,
-                        CASE 
-                            WHEN SUM(s.Quantity) > 0 THEN COALESCE(SUM(s.Price) / CAST(SUM(s.Quantity) AS REAL), 0)
-                            ELSE 0
-                        END as AveragePrice,
-                        COALESCE(MIN(s.Price / CAST(s.Quantity AS REAL)), 0) as MinPrice,
-                        COALESCE(MAX(s.Price / CAST(s.Quantity AS REAL)), 0) as MaxPrice
-                    FROM Items i
-                    LEFT JOIN ItemSales s ON i.ItemId = s.ItemId
-                    GROUP BY i.ItemId, i.ItemLink, i.FirstSeenDate, i.LastSeenDate
-                    ORDER BY i.LastSeenDate DESC
-                ";
-                
-                using var reader = command.ExecuteReader();
-                while (reader.Read())
-                {
-                    items.Add(new Item
-                    {
-                        ItemId = reader.GetInt64(0),
-                        ItemLink = reader.GetString(1),
-                        FirstSeenDate = reader.GetInt64(2),
-                        LastSeenDate = reader.GetInt64(3),
-                        TotalSalesCount = reader.GetInt32(4),
-                        TotalQuantitySold = reader.GetInt64(5),
-                        TotalValueSold = reader.GetInt64(6),
-                        AveragePrice = reader.GetInt64(7),
-                        MinPrice = reader.GetInt64(8),
-                        MaxPrice = reader.GetInt64(9)
-                    });
-                }
-                
-                return items;
-            });
-        }
-
         public async Task<List<ItemSale>> LoadSalesForItemAsync(long itemId)
         {
             return await Task.Run(() =>
@@ -439,7 +386,7 @@ namespace MarketLensESO.Services
             });
         }
 
-        public async Task<List<ItemSummary>> LoadItemSummariesAsync()
+        public async Task<List<ItemSummary>> LoadItemSummariesAsync(int? guildId = null)
         {
             return await Task.Run(() =>
             {
@@ -449,7 +396,8 @@ namespace MarketLensESO.Services
                 connection.Open();
                 
                 using var command = connection.CreateCommand();
-                command.CommandText = @"
+                var guildFilter = guildId.HasValue ? "AND s.GuildId = @GuildId" : "";
+                command.CommandText = $@"
                     SELECT 
                         i.ItemLink,
                         COUNT(s.SaleId) as TotalSalesCount,
@@ -463,9 +411,15 @@ namespace MarketLensESO.Services
                         COALESCE(MAX(s.Price / CAST(s.Quantity AS REAL)), 0) as MaxPrice
                     FROM Items i
                     INNER JOIN ItemSales s ON i.ItemId = s.ItemId
+                    WHERE 1=1 {guildFilter}
                     GROUP BY i.ItemLink
                     ORDER BY TotalValueSold DESC
                 ";
+                
+                if (guildId.HasValue)
+                {
+                    command.Parameters.AddWithValue("@GuildId", guildId.Value);
+                }
                 
                 using var reader = command.ExecuteReader();
                 while (reader.Read())
@@ -483,6 +437,101 @@ namespace MarketLensESO.Services
                 }
                 
                 return summaries;
+            });
+        }
+
+        public async Task<List<Item>> LoadAllItemsAsync(int? guildId = null)
+        {
+            return await Task.Run(() =>
+            {
+                var items = new List<Item>();
+                
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                
+                using var command = connection.CreateCommand();
+                string guildFilter;
+                if (guildId.HasValue)
+                {
+                    guildFilter = "AND s.GuildId = @GuildId";
+                }
+                else
+                {
+                    guildFilter = "";
+                }
+                
+                command.CommandText = $@"
+                    SELECT 
+                        i.ItemId,
+                        i.ItemLink,
+                        i.FirstSeenDate,
+                        i.LastSeenDate,
+                        COUNT(s.SaleId) as TotalSalesCount,
+                        COALESCE(SUM(s.Quantity), 0) as TotalQuantitySold,
+                        COALESCE(SUM(s.Price), 0) as TotalValueSold,
+                        CASE 
+                            WHEN SUM(s.Quantity) > 0 THEN COALESCE(SUM(s.Price) / CAST(SUM(s.Quantity) AS REAL), 0)
+                            ELSE 0
+                        END as AveragePrice,
+                        COALESCE(MIN(s.Price / CAST(s.Quantity AS REAL)), 0) as MinPrice,
+                        COALESCE(MAX(s.Price / CAST(s.Quantity AS REAL)), 0) as MaxPrice
+                    FROM Items i
+                    INNER JOIN ItemSales s ON i.ItemId = s.ItemId
+                    WHERE 1=1 {guildFilter}
+                    GROUP BY i.ItemId, i.ItemLink, i.FirstSeenDate, i.LastSeenDate
+                    ORDER BY i.LastSeenDate DESC
+                ";
+                
+                if (guildId.HasValue)
+                {
+                    command.Parameters.AddWithValue("@GuildId", guildId.Value);
+                }
+                
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    items.Add(new Item
+                    {
+                        ItemId = reader.GetInt64(0),
+                        ItemLink = reader.GetString(1),
+                        FirstSeenDate = reader.GetInt64(2),
+                        LastSeenDate = reader.GetInt64(3),
+                        TotalSalesCount = reader.GetInt32(4),
+                        TotalQuantitySold = reader.GetInt64(5),
+                        TotalValueSold = reader.GetInt64(6),
+                        AveragePrice = reader.GetInt64(7),
+                        MinPrice = reader.GetInt64(8),
+                        MaxPrice = reader.GetInt64(9)
+                    });
+                }
+                
+                return items;
+            });
+        }
+
+        public async Task<List<(int GuildId, string GuildName)>> LoadAllGuildsAsync()
+        {
+            return await Task.Run(() =>
+            {
+                var guilds = new List<(int, string)>();
+                
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                
+                using var command = connection.CreateCommand();
+                command.CommandText = @"
+                    SELECT DISTINCT GuildId, GuildName
+                    FROM ItemSales
+                    ORDER BY GuildName
+                ";
+                
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    guilds.Add((reader.GetInt32(0), reader.GetString(1)));
+                }
+                
+                return guilds;
             });
         }
     }
