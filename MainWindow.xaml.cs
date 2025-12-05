@@ -14,8 +14,10 @@ namespace MarketLensESO
         private readonly DatabaseService _databaseService;
         private List<Item> _items;
         private List<ItemSummary> _summaries;
+        private List<GuildItemSummary> _guildItems;
         private Item? _selectedItem;
         private int? _selectedGuildId;
+        private bool _guildItemsLoaded = false;
 
         public MainWindow()
         {
@@ -23,13 +25,42 @@ namespace MarketLensESO
             _databaseService = new DatabaseService();
             _items = new List<Item>();
             _summaries = new List<ItemSummary>();
+            _guildItems = new List<GuildItemSummary>();
             Loaded += Window_Loaded;
+            MainTabControl.SelectionChanged += MainTabControl_SelectionChanged;
         }
 
         private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
             await LoadGuildsAsync();
             await LoadItemsAsync();
+            await LoadGuildItemsAsync();
+        }
+
+        private async void MainTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // Only reload if actually switching tabs (not just clicking within the same tab)
+            if (e.AddedItems.Count > 0 && e.AddedItems[0] is TabItem selectedTab)
+            {
+                var tabHeader = selectedTab.Header?.ToString();
+                if (tabHeader == "By Guild")
+                {
+                    GuildComboBox.IsEnabled = false;
+                    if (!_guildItemsLoaded)
+                    {
+                        await LoadGuildItemsAsync();
+                        _guildItemsLoaded = true;
+                    }
+                }
+                else
+                {
+                    GuildComboBox.IsEnabled = true;
+                    if (tabHeader != "By Guild")
+                    {
+                        _guildItemsLoaded = false;
+                    }
+                }
+            }
         }
 
         private async Task LoadGuildsAsync()
@@ -138,6 +169,7 @@ namespace MarketLensESO
         {
             UpdateDataGrid();
             UpdateSummaryDataGrid();
+            UpdateGuildItemsDataGrid();
         }
 
         private void UpdateSummaryDataGrid()
@@ -279,6 +311,77 @@ namespace MarketLensESO
             catch (Exception ex)
             {
                 MessageBox.Show($"Error setting item name: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async Task LoadGuildItemsAsync()
+        {
+            try
+            {
+                var allGuildItems = await _databaseService.LoadItemsByGuildAsync();
+                
+                // Filter: remove entries with less than 100,000 total value
+                // Sort by total value descending
+                _guildItems = allGuildItems
+                    .Where(g => g.TotalValueSold >= 100000)
+                    .OrderByDescending(g => g.TotalValueSold)
+                    .ToList();
+                
+                UpdateGuildItemsDataGrid();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading guild items: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void UpdateGuildItemsDataGrid()
+        {
+            var filteredGuildItems = ApplyGuildItemsSearchFilter(_guildItems);
+            GuildItemsDataGrid.ItemsSource = filteredGuildItems;
+        }
+
+        private List<GuildItemSummary> ApplyGuildItemsSearchFilter(List<GuildItemSummary> guildItems)
+        {
+            if (string.IsNullOrWhiteSpace(SearchTextBox?.Text))
+                return guildItems;
+
+            var searchText = SearchTextBox.Text.ToLowerInvariant();
+            return guildItems.Where(g =>
+                (g.ItemLink?.ToLowerInvariant().Contains(searchText) ?? false) ||
+                (g.Name?.ToLowerInvariant().Contains(searchText) ?? false) ||
+                (g.GuildName?.ToLowerInvariant().Contains(searchText) ?? false) ||
+                g.TotalValueSold.ToString().Contains(searchText) ||
+                g.TotalSalesCount.ToString().Contains(searchText) ||
+                g.TotalQuantitySold.ToString().Contains(searchText)
+            ).ToList();
+        }
+
+        private void GuildItemsDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // Do nothing - prevent any refresh on selection change
+        }
+
+        private async void ViewDetailsGuildMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (GuildItemsDataGrid.SelectedItem is GuildItemSummary selectedGuildItem)
+                {
+                    var sales = await _databaseService.LoadSalesForItemInGuildAsync(
+                        selectedGuildItem.ItemId, 
+                        selectedGuildItem.GuildId);
+                    
+                    var detailsWindow = new GuildItemDetailsWindow(selectedGuildItem, sales);
+                    detailsWindow.Owner = this;
+                    detailsWindow.ShowDialog();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading item details: {ex.Message}", "Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }

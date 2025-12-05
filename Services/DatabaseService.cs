@@ -558,6 +558,106 @@ namespace MarketLensESO.Services
                 return result?.ToString() ?? "";
             });
         }
+
+        public async Task<List<GuildItemSummary>> LoadItemsByGuildAsync()
+        {
+            return await Task.Run(() =>
+            {
+                var summaries = new List<GuildItemSummary>();
+                
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                
+                using var command = connection.CreateCommand();
+                command.CommandText = @"
+                    SELECT 
+                        i.ItemId,
+                        i.ItemLink,
+                        i.Name,
+                        s.GuildId,
+                        s.GuildName,
+                        COALESCE(SUM(s.Price), 0) as TotalValueSold,
+                        COUNT(s.SaleId) as TotalSalesCount,
+                        COALESCE(SUM(s.Quantity), 0) as TotalQuantitySold
+                    FROM Items i
+                    INNER JOIN ItemSales s ON i.ItemId = s.ItemId
+                    GROUP BY i.ItemId, i.ItemLink, i.Name, s.GuildId, s.GuildName
+                    ORDER BY s.GuildName, i.ItemLink
+                ";
+                
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    summaries.Add(new GuildItemSummary
+                    {
+                        ItemId = reader.GetInt64(0),
+                        ItemLink = reader.GetString(1),
+                        Name = reader.GetString(2),
+                        GuildId = reader.GetInt32(3),
+                        GuildName = reader.GetString(4),
+                        TotalValueSold = reader.GetInt64(5),
+                        TotalSalesCount = reader.GetInt32(6),
+                        TotalQuantitySold = reader.GetInt64(7)
+                    });
+                }
+                
+                return summaries;
+            });
+        }
+
+        public async Task<List<ItemSale>> LoadSalesForItemInGuildAsync(long itemId, int guildId)
+        {
+            return await Task.Run(() =>
+            {
+                var sales = new List<ItemSale>();
+                
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                
+                using var command = connection.CreateCommand();
+                command.CommandText = @"
+                    SELECT 
+                        s.SaleId,
+                        s.ItemId,
+                        i.ItemLink,
+                        s.GuildId,
+                        s.GuildName,
+                        s.Seller,
+                        s.Buyer,
+                        s.Quantity,
+                        s.Price,
+                        s.SaleTimestamp,
+                        s.DuplicateIndex
+                    FROM ItemSales s
+                    INNER JOIN Items i ON s.ItemId = i.ItemId
+                    WHERE s.ItemId = @ItemId AND s.GuildId = @GuildId
+                    ORDER BY s.SaleTimestamp DESC
+                ";
+                command.Parameters.AddWithValue("@ItemId", itemId);
+                command.Parameters.AddWithValue("@GuildId", guildId);
+                
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    sales.Add(new ItemSale
+                    {
+                        SaleId = reader.GetInt64(0),
+                        ItemId = reader.GetInt64(1),
+                        ItemLink = reader.GetString(2),
+                        GuildId = reader.GetInt32(3),
+                        GuildName = reader.GetString(4),
+                        Seller = reader.GetString(5),
+                        Buyer = reader.GetString(6),
+                        Quantity = reader.GetInt32(7),
+                        Price = reader.GetInt32(8),
+                        SaleTimestamp = reader.GetInt64(9),
+                        DuplicateIndex = reader.GetInt32(10)
+                    });
+                }
+                
+                return sales;
+            });
+        }
     }
 }
 
