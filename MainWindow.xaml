@@ -851,6 +851,32 @@
 								</Style>
 							</DataGridTextColumn.HeaderStyle>
 						</DataGridTextColumn>
+						<DataGridTextColumn Header="Internal"
+											Binding="{Binding Internal, StringFormat=N0}"
+											Width="100">
+							<DataGridTextColumn.ElementStyle>
+								<Style TargetType="TextBlock">
+									<Setter Property="TextAlignment" Value="Right"/>
+									<Setter Property="FontSize" Value="13"/>
+									<Setter Property="FontWeight" Value="SemiBold"/>
+									<Setter Property="Foreground" Value="#2C3E50"/>
+									<Setter Property="VerticalAlignment" Value="Center"/>
+									<Setter Property="Margin" Value="4,0"/>
+								</Style>
+							</DataGridTextColumn.ElementStyle>
+							<DataGridTextColumn.HeaderStyle>
+								<Style TargetType="DataGridColumnHeader">
+									<Setter Property="FontSize" Value="12"/>
+									<Setter Property="FontWeight" Value="Bold"/>
+									<Setter Property="Foreground" Value="#34495E"/>
+									<Setter Property="Background" Value="#F8F9FA"/>
+									<Setter Property="BorderBrush" Value="#E1E5E9"/>
+									<Setter Property="BorderThickness" Value="0,0,1,1"/>
+									<Setter Property="Padding" Value="8,10"/>
+									<Setter Property="HorizontalContentAlignment" Value="Right"/>
+								</Style>
+							</DataGridTextColumn.HeaderStyle>
+						</DataGridTextColumn>
 						<DataGridTextColumn Header="3.5%"
 											Binding="{Binding Percent3_5, StringFormat=N0}"
 											Width="120">

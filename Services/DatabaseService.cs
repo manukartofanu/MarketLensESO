@@ -658,6 +658,102 @@ namespace MarketLensESO.Services
                 return sales;
             });
         }
+
+        public async Task<HashSet<string>> GetAllSellersInGuildAsync(int guildId)
+        {
+            return await Task.Run(() =>
+            {
+                var sellers = new HashSet<string>();
+                
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                
+                using var command = connection.CreateCommand();
+                command.CommandText = @"
+                    SELECT DISTINCT Seller
+                    FROM ItemSales
+                    WHERE GuildId = @GuildId
+                ";
+                command.Parameters.AddWithValue("@GuildId", guildId);
+                
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    sellers.Add(reader.GetString(0));
+                }
+                
+                return sellers;
+            });
+        }
+
+        public async Task<Dictionary<(long ItemId, int GuildId), int>> CalculateInternalCountsAsync(
+            List<GuildItemSummary> guildItems)
+        {
+            return await Task.Run(() =>
+            {
+                var internalCounts = new Dictionary<(long ItemId, int GuildId), int>();
+                
+                if (guildItems.Count == 0)
+                    return internalCounts;
+                
+                // Group items by guild
+                var itemsByGuild = guildItems.GroupBy(g => g.GuildId).ToList();
+                
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                
+                foreach (var guildGroup in itemsByGuild)
+                {
+                    var guildId = guildGroup.Key;
+                    var itemIds = guildGroup.Select(g => g.ItemId).ToList();
+                    
+                    if (itemIds.Count == 0)
+                        continue;
+                    
+                    // Build parameterized query for all items in this guild at once
+                    var itemIdPlaceholders = string.Join(",", itemIds.Select((_, i) => $"@ItemId{i}"));
+                    
+                    using var countCommand = connection.CreateCommand();
+                    countCommand.CommandText = $@"
+                        SELECT ItemId, COUNT(DISTINCT SaleId) as InternalCount
+                        FROM ItemSales
+                        WHERE ItemId IN ({itemIdPlaceholders})
+                        AND GuildId = @GuildId
+                        AND Buyer IN (
+                            SELECT DISTINCT Seller
+                            FROM ItemSales
+                            WHERE GuildId = @GuildId
+                        )
+                        GROUP BY ItemId
+                    ";
+                    
+                    for (int i = 0; i < itemIds.Count; i++)
+                    {
+                        countCommand.Parameters.AddWithValue($"@ItemId{i}", itemIds[i]);
+                    }
+                    countCommand.Parameters.AddWithValue("@GuildId", guildId);
+                    
+                    using var reader = countCommand.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        var itemId = reader.GetInt64(0);
+                        var count = reader.GetInt32(1);
+                        internalCounts[(itemId, guildId)] = count;
+                    }
+                    
+                    // Set 0 for items that had no internal sales
+                    foreach (var itemId in itemIds)
+                    {
+                        if (!internalCounts.ContainsKey((itemId, guildId)))
+                        {
+                            internalCounts[(itemId, guildId)] = 0;
+                        }
+                    }
+                }
+                
+                return internalCounts;
+            });
+        }
     }
 }
 

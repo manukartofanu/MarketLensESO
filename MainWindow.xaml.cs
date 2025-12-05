@@ -322,9 +322,24 @@ namespace MarketLensESO
                 var allGuildItems = await _databaseService.LoadItemsByGuildAsync();
                 
                 // Filter: remove entries with less than 100,000 total value
-                // Sort by total value descending
-                _guildItems = allGuildItems
+                var filteredItems = allGuildItems
                     .Where(g => g.TotalValueSold >= 100000)
+                    .ToList();
+                
+                // Calculate Internal counts
+                var internalCounts = await _databaseService.CalculateInternalCountsAsync(filteredItems);
+                
+                // Set Internal count for each item
+                foreach (var item in filteredItems)
+                {
+                    if (internalCounts.TryGetValue((item.ItemId, item.GuildId), out var count))
+                    {
+                        item.Internal = count;
+                    }
+                }
+                
+                // Sort by total value descending
+                _guildItems = filteredItems
                     .OrderByDescending(g => g.TotalValueSold)
                     .ToList();
                 
@@ -374,7 +389,10 @@ namespace MarketLensESO
                         selectedGuildItem.ItemId, 
                         selectedGuildItem.GuildId);
                     
-                    var detailsWindow = new GuildItemDetailsWindow(selectedGuildItem, sales);
+                    // Get all sellers for this guild
+                    var sellers = await _databaseService.GetAllSellersInGuildAsync(selectedGuildItem.GuildId);
+                    
+                    var detailsWindow = new GuildItemDetailsWindow(selectedGuildItem, sales, sellers);
                     detailsWindow.Owner = this;
                     detailsWindow.ShowDialog();
                 }

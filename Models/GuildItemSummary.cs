@@ -11,6 +11,8 @@ namespace MarketLensESO.Models
         public int TotalSalesCount { get; set; }
         public long TotalQuantitySold { get; set; }
         
+        public int Internal { get; set; }
+        
         // Calculated properties
         public long Percent3_5 => (long)(TotalValueSold * 0.035);
         public long Percent1 => (long)(TotalValueSold * 0.01);

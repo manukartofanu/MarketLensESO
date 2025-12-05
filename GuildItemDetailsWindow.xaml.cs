@@ -13,13 +13,14 @@ namespace MarketLensESO
             public int LotsCount { get; set; }
             public long TotalValue { get; set; }
             public long AveragePrice { get; set; }
+            public int Internal { get; set; }
             
             // Calculated properties
             public long Percent3_5 => (long)(TotalValue * 0.035);
             public long Percent1 => (long)(TotalValue * 0.01);
         }
 
-        public GuildItemDetailsWindow(GuildItemSummary guildItem, List<ItemSale> sales)
+        public GuildItemDetailsWindow(GuildItemSummary guildItem, List<ItemSale> sales, HashSet<string> sellers)
         {
             InitializeComponent();
             
@@ -37,7 +38,8 @@ namespace MarketLensESO
                     Quantity = g.Key,
                     LotsCount = g.Count(),
                     TotalValue = g.Sum(s => s.Price),
-                    AveragePrice = g.Key > 0 ? (long)(g.Sum(s => s.Price) / (double)(g.Sum(s => s.Quantity))) : 0
+                    AveragePrice = g.Key > 0 ? (long)(g.Sum(s => s.Price) / (double)(g.Sum(s => s.Quantity))) : 0,
+                    Internal = g.Count(s => sellers.Contains(s.Buyer))
                 })
                 .OrderByDescending(g => g.Quantity)
                 .ToList();
