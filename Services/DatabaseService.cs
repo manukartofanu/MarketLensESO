@@ -342,6 +342,57 @@ namespace MarketLensESO.Services
             });
         }
 
+        public async Task<List<ItemSale>> LoadAllSalesAsync()
+        {
+            return await Task.Run(() =>
+            {
+                var sales = new List<ItemSale>();
+                
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                
+                using var command = connection.CreateCommand();
+                command.CommandText = @"
+                    SELECT 
+                        s.SaleId,
+                        s.ItemId,
+                        i.ItemLink,
+                        s.GuildId,
+                        s.GuildName,
+                        s.Seller,
+                        s.Buyer,
+                        s.Quantity,
+                        s.Price,
+                        s.SaleTimestamp,
+                        s.DuplicateIndex
+                    FROM ItemSales s
+                    INNER JOIN Items i ON s.ItemId = i.ItemId
+                    ORDER BY s.SaleTimestamp DESC
+                ";
+                
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    sales.Add(new ItemSale
+                    {
+                        SaleId = reader.GetInt64(0),
+                        ItemId = reader.GetInt64(1),
+                        ItemLink = reader.GetString(2),
+                        GuildId = reader.GetInt32(3),
+                        GuildName = reader.GetString(4),
+                        Seller = reader.GetString(5),
+                        Buyer = reader.GetString(6),
+                        Quantity = reader.GetInt32(7),
+                        Price = reader.GetInt32(8),
+                        SaleTimestamp = reader.GetInt64(9),
+                        DuplicateIndex = reader.GetInt32(10)
+                    });
+                }
+                
+                return sales;
+            });
+        }
+
         public async Task<int> GetTotalItemsCountAsync()
         {
             return await Task.Run(() =>
@@ -536,6 +587,30 @@ namespace MarketLensESO.Services
                 command.Parameters.AddWithValue("@ItemId", itemId);
                 
                 command.ExecuteNonQuery();
+            });
+        }
+
+        public async Task<Dictionary<long, string>> LoadAllItemNamesAsync()
+        {
+            return await Task.Run(() =>
+            {
+                var itemNames = new Dictionary<long, string>();
+                
+                using var connection = new SqliteConnection(_connectionString);
+                connection.Open();
+                
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT ItemId, Name FROM Items";
+                
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    var itemId = reader.GetInt64(0);
+                    var name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+                    itemNames[itemId] = name;
+                }
+                
+                return itemNames;
             });
         }
 
